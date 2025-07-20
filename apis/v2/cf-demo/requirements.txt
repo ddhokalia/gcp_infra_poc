@@ -1,0 +1,2 @@
+--find-links ../dist
+genai_utils==0.1.0
