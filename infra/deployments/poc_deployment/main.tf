@@ -22,7 +22,7 @@ resource "google_storage_bucket" "function_source_bucket" {
 # 2) Zip your function code
 data "archive_file" "function_zip" {
   type        = "zip"
-  source_dir  = "${path.module}/../../apis/v2/cf-demo" 
+  source_dir  = "${path.module}/../../../apis/v2/cf-demo"
   output_path = "${path.module}/cf-demo.zip"
 }
 
