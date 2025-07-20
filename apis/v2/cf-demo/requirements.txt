@@ -1,2 +1,4 @@
---find-links ../dist
+--extra-index-url https://us-central1-python.pkg.dev/slw-patenthub-dev/genai-utils/
 genai_utils==0.1.0
+# other deps here
+
