@@ -1,35 +1,55 @@
-variable "region" {
-  type = string
+terraform {
+  required_providers {
+    google = {
+      source  = "hashicorp/google"
+      version = ">= 4.0"
+    }
+  }
 }
 
 provider "google" {
-  project = "slw-patenthub-dev"
+  project = var.project_id
   region  = var.region
 }
 
-data "archive_file" "function_zip" {
-  type        = "zip"
-  source_dir  = "${path.module}/../../../cf_demo"
-  output_path = "${path.module}/function-source.zip"
+# 1) Create GCS bucket for function code
+resource "google_storage_bucket" "function_source_bucket" {
+  name     = "${var.project_id}-gcp-poc-function-source"
+  location = var.region
+  uniform_bucket_level_access = true
 }
 
-resource "google_storage_bucket_object" "cf_source" {
-  name   = "cf-demo-v2-source.zip"
-  bucket = "your-upload-bucket-name"
+# 2) Zip your function code
+data "archive_file" "function_zip" {
+  type        = "zip"
+  source_dir  = "${path.module}/../../../apis/v2/cf-demo"
+  output_path = "${path.module}/cf-demo.zip"
+}
+
+# 3) Upload the zip to GCS
+resource "google_storage_bucket_object" "function_zip_object" {
+  name   = "cf-demo-${data.archive_file.function_zip.output_md5}.zip"
+  bucket = google_storage_bucket.function_source_bucket.name
   source = data.archive_file.function_zip.output_path
 }
 
+# 4) Deploy the Cloud Function
 resource "google_cloudfunctions_function" "cf_demo" {
-  name        = "cf-demo-v2"
-  description = "Demo Cloud Function"
-  runtime     = "python311"
-  region      = var.region
-  source_archive_bucket = google_storage_bucket_object.cf_source.bucket
-  source_archive_object = google_storage_bucket_object.cf_source.name
-  entry_point = "hello_world"
-  trigger_http = true
-  available_memory_mb = 256
-  environment_variables = {
-    PYTHONHTTPSVERIFY = "0"
-  }
+  name                    = "cf-demo-v2"
+  runtime                 = "python311"
+  entry_point             = "hello"
+  region                  = var.region
+  source_archive_bucket   = google_storage_bucket.function_source_bucket.name
+  source_archive_object   = google_storage_bucket_object.function_zip_object.name
+  trigger_http            = true
+  available_memory_mb     = 128
+}
+
+# 5) Allow public (unauthenticated) access
+resource "google_cloudfunctions_function_iam_member" "invoker" {
+  project        = google_cloudfunctions_function.cf_demo.project
+  region         = google_cloudfunctions_function.cf_demo.region
+  cloud_function = google_cloudfunctions_function.cf_demo.name
+  role           = "roles/cloudfunctions.invoker"
+  member         = "allUsers"
 }
